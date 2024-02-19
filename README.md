@@ -87,8 +87,6 @@ This contains 5 files. These files are code for each Bayesian multi-city multi-s
 
 **./JAGS/multiSpec_Imperv.R:** Model using impervious cover as an occupancy covariate
 
-**./JAGS/multiSpec_Null.R:** Model with no covariates on occupancy (the "null model")
-
 ---
 
 <div align="center"><h3>R</h3></div>
