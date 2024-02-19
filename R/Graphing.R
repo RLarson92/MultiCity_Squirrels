@@ -6,8 +6,7 @@ library(ggpubr)
 library(grafify)
 library(grid)
 library(gridExtra)
-# load functions used to clean data
-setwd("~/Documents/For School/Iowa/Dissertation Research/Multi-City Squirrels/R/MultiSpecies")
+# load functions - we'll need the 'split mcmc' and 'wide-to-stacked' functions
 functions_to_load <- list.files(
   "./R/functions/",
   full.names = TRUE
@@ -16,7 +15,7 @@ for(fn in functions_to_load){
   source(fn)
 }
 
-# read in the results
+# read in the results and site-level covariates
 cooc_covs <- read.csv("data/cooc_covs.csv")
 canopy_mod <- readRDS("./results/canopy_model.RDS")
 
