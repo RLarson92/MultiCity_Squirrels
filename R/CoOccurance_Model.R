@@ -108,30 +108,31 @@ library(runjags)
 #### Fit the Model (PCA model) ####
 # read in site-level covariates
 site_covariates <- read.csv("./data/cooc_covs.csv", stringsAsFactors = FALSE)
-continuous_covariates <- site_covariates[,c(8,11,14)] # pulling out just the covariates, sans the city/site names
-library(psych)
+continuous_covariates <- site_covariates[,c(5,8,11)] # pulling out just the mean-centered covariate values
+# run the PCA
 PCA <- prcomp(continuous_covariates, center = TRUE, scale. = TRUE)
 summary(PCA)
 library(ggfortify)
 biplot(PCA)
 # PC1: more +values = more impervious, more -values = more canopy+grass
 # PC2: more +values = more canopy, more -values = more grass
+# save the PCA loadings 1 & 2 for use in the model
 covs_for_model <- PCA$x[,1:2]
 covMatrix <- as.matrix(covs_for_model)
 
 # Data list for model
 data_list <- list(
-  nspec = max(y_long$Species),
-  ncity = max(y_long$City),
-  nsite = max(y_long$Site),
+  nspec = max(y_long$Species), # number of species
+  ncity = max(y_long$City), # number of cities
+  nsite = max(y_long$Site), # number of sites
   PC1 = covMatrix[,1],
   PC2 = covMatrix[,2],
-  nrep = max(y_long$Week),
-  trapDays = obsArray, #needs to be a 4-dimensional array
-  y = my_array, #needs to be a 4-dimensional array
-  nseason = max(y_long$Season),
+  nrep = max(y_long$Week), # number of replicates (weeks)
+  trapDays = obsArray, 
+  y = my_array, 
+  nseason = max(y_long$Season), # number of primary sampling occasions (seasons)
   Xcat = Xcat,
-  city_vec = as.numeric(factor(FS_occu$City))
+  city_vec = as.numeric(factor(FS_occu$City)) #necessary for the nested indexing of sites within cities
 )
 
 # initial starting values for each chain
@@ -251,13 +252,13 @@ PCA_mod <- runjags::run.jags(
   method = "parallel"
 )
 my_end <- Sys.time()
-
+# save the results for later
 saveRDS(PCA_mod, "./results/PCA_model.RDS")
 
 #### Imperv Only Model ####
 # pulling out the continuous site covariates & scaling them
 site_covariates <- read.csv("./data/cooc_covs.csv", stringsAsFactors = FALSE)
-continuous_covariates <- site_covariates[,12]
+continuous_covariates <- site_covariates[,6]
 continuous_covariates <- scale(continuous_covariates)
 covs_for_model <- cbind.data.frame("imperv"=continuous_covariates[,1],
                                    "city"=site_covariates[,2],
@@ -274,8 +275,8 @@ data_list <- list(
   nsite = max(y_long$Site),
   imperv = covMatrix[,1],
   nrep = max(y_long$Week),
-  trapDays = obsArray, #needs to be a 4-dimensional array
-  y = my_array, #needs to be a 4-dimensional array
+  trapDays = obsArray,
+  y = my_array, 
   nseason = max(y_long$Season),
   Xcat = Xcat,
   city_vec = as.numeric(factor(FS_occu$City))
@@ -284,7 +285,7 @@ data_list <- list(
 # Fit the model
 my_start <- Sys.time()
 imperv_mod <- runjags::run.jags(
-  model = "./JAGS/multiSpec_model_ranef.R",
+  model = "./JAGS/multiSpec_imperv.R",
   monitor = c("a0_mu", "a0_sd", "a1_mu", "a1_sd", "a0", "a1",
               "b0_mu", "b0_sd", "b1_mu", "b1_sd", "b0", "b1",
               "c0_mu", "c0_sd", "c1_mu", "c1_sd", "c0", "c1",
@@ -309,7 +310,7 @@ saveRDS(imperv_mod, "./results/imperv_model.RDS")
 #### Canopy Only Model ####
 # pulling out the continuous site covariates & scaling them
 site_covariates <- read.csv("./data/cooc_covs.csv", stringsAsFactors = FALSE)
-continuous_covariates <- site_covariates[,9]
+continuous_covariates <- site_covariates[,5]
 continuous_covariates <- scale(continuous_covariates)
 cov(continuous_covariates)
 covs_for_model <- cbind.data.frame("canopy"=continuous_covariates[,1],
@@ -327,8 +328,8 @@ data_list <- list(
   nsite = max(y_long$Site),
   canopy = covMatrix[,1],
   nrep = max(y_long$Week),
-  trapDays = obsArray, #needs to be a 4-dimensional array
-  y = my_array, #needs to be a 4-dimensional array
+  trapDays = obsArray, 
+  y = my_array, 
   nseason = max(y_long$Season),
   Xcat = Xcat,
   city_vec = as.numeric(factor(FS_occu$City))
@@ -361,7 +362,7 @@ saveRDS(canopy_mod, "./results/canopy_model.RDS")
 #### Grass Only Model #####
 # pulling out the continuous site covariates & scaling them
 site_covariates <- read.csv("./data/cooc_covs.csv", stringsAsFactors = FALSE)
-continuous_covariates <- site_covariates[,15]
+continuous_covariates <- site_covariates[,11]
 continuous_covariates <- scale(continuous_covariates)
 cov(continuous_covariates)
 covs_for_model <- cbind.data.frame("grass"=continuous_covariates[,1],
@@ -379,8 +380,8 @@ data_list <- list(
   nsite = max(y_long$Site),
   grass = covMatrix[,1],
   nrep = max(y_long$Week),
-  trapDays = obsArray, #needs to be a 4-dimensional array
-  y = my_array, #needs to be a 4-dimensional array
+  trapDays = obsArray, 
+  y = my_array, 
   nseason = max(y_long$Season),
   Xcat = Xcat,
   city_vec = as.numeric(factor(FS_occu$City))
@@ -389,7 +390,7 @@ data_list <- list(
 # Fit the model
 my_start <- Sys.time()
 grass_mod <- runjags::run.jags(
-  model = "./JAGS/multiSpec_grass.R",
+  model = "./JAGS/multiSpec_Grass.R",
   monitor = c("a0_mu", "a0_sd", "a1_mu", "a1_sd", "a0", "a1",
               "b0_mu", "b0_sd", "b1_mu", "b1_sd", "b0", "b1",
               "c0_mu", "c0_sd", "c1_mu", "c1_sd", "c0", "c1",
@@ -410,102 +411,8 @@ grass_mod <- runjags::run.jags(
 )
 my_end <- Sys.time()
 saveRDS(grass_mod, "./results/grass_model.RDS")
-##### Null Model ####
-# Data list for model
-data_list <- list(
-  nspec = max(y_long$Species),
-  ncity = max(y_long$City),
-  nsite = max(y_long$Site),
-  nrep = max(y_long$Week),
-  trapDays = obsArray, #needs to be a 4-dimensional array
-  y = my_array, #needs to be a 4-dimensional array
-  nseason = max(y_long$Season),
-  Xcat = Xcat,
-  city_vec = as.numeric(factor(FS_occu$City))
-)
-# initial starting values for each chain
-null_inits <- function(chain){
-  gen_list <- function(chain = chain){
-    list(
-      x = matrix(1,
-                 ncol = data_list$nseason,
-                 nrow = data_list$nsite),
-      p0_mu = rnorm(data_list$nspec),
-      p0_tau = rgamma(data_list$nspec,1,1),
-      p0 = matrix(1,
-                  ncol = data_list$ncity,
-                  nrow = data_list$nspec), 
-      p1_mu = rnorm(data_list$nspec),
-      p1_tau = rgamma(data_list$nspec,1,1),
-      p1 = matrix(1,
-                  ncol = data_list$ncity,
-                  nrow = data_list$nspec), 
-      phi_mu = rnorm(data_list$nspec),
-      phi_tau = rgamma(data_list$nspec,1,1),
-      phi = matrix(1,
-                   ncol = data_list$ncity,
-                   nrow = data_list$nspec), 
-      a0_mu = rnorm(1),
-      a0_tau = rgamma(1,1,1),
-      a0 = rnorm(data_list$ncity),
-      b0_mu = rnorm(1),
-      b0_tau = rgamma(1,1,1),
-      b0 = rnorm(data_list$ncity),
-      c0_mu = rnorm(1),
-      c0_tau = rgamma(1,1,1),
-      c0 = rnorm(data_list$ncity),
-      d0_mu = rnorm(1),
-      d0_tau = rgamma(1,1,1),
-      d0 = rnorm(data_list$ncity), 
-      e0_mu = rnorm(1),
-      e0_tau = rgamma(1,1,1),
-      e0 = rnorm(data_list$ncity), 
-      g0_mu = rnorm(1),
-      g0_tau = rgamma(1,1,1),
-      g0 = rnorm(data_list$ncity) 
-    )
-  }
-  return(
-    switch(
-      chain,
-      "1" = gen_list(chain),
-      "2" = gen_list(chain),
-      "3" = gen_list(chain),
-      "4" = gen_list(chain),
-      "5" = gen_list(chain),
-      "6" = gen_list(chain),
-      "7" = gen_list(chain),
-      "8" = gen_list(chain)
-    )
-  )
-}
 
-# Fit the model
-my_start <- Sys.time()
-null_mod <- runjags::run.jags(
-  model = "./JAGS/multiSpec_Null.R",
-  monitor = c("a0_mu", "a0_sd", "a0",
-              "b0_mu", "b0_sd", "b0",
-              "c0_mu", "c0_sd", "c0",
-              "d0_mu", "d0_sd", "d0",
-              "e0_mu", "e0_sd", "e0",
-              "g0_mu", "g0_sd", "g0",
-              "p0_mu", "p0_sd", "p1_mu", "p1_sd", "p0", "p1",
-              "phi_mu", "phi_sd", "phi","x"),
-  data = data_list,
-  n.chains = 3,
-  inits = null_inits,
-  burnin = 50000,
-  sample = 20000,
-  adapt = 500,
-  modules = "glm",
-  thin = 2,
-  method = "parallel"
-)
-my_end <- Sys.time()
-saveRDS(null_mod, "./results/null_model.RDS")
-
-#####
+##### Model Selection #####
 library(coda)
 data_list <- readRDS("./data/data_list.RDS")
 imperv_mod <- readRDS("./results/imperv_model.RDS")
@@ -524,14 +431,4 @@ PCA_mod <- readRDS("./results/PCA_model.RDS")
 mc <- do.call("rbind", PCA_mod$mcmc)
 calculate_cpo(mm = mc, data_list = data_list)
 
-
-# DIC stuff, but not sure it works for this model
-canopy_mod <- readRDS("./results/canopy_model.RDS")
-grass_mod <- readRDS("./results/grass_model.RDS")
-PCA_mod <- readRDS("./results/PCA_model.RDS")
-null_mod <- readRDS("./results/null_model.RDS")
-runjags::extract(imperv_mod, 'dic')
-runjags::extract(canopy_mod, 'dic')
-runjags::extract(grass_mod, 'dic')
-runjags::extract(PCA_mod, 'dic')
-runjags::extract(null_mod, 'dic')
+# canopy-only model is the best fit, as indicated by the lowest cpo value
