@@ -1,9 +1,8 @@
-[![DOI](https://doi.org)](https://doi.org)
 # MultiCity_Squirrels
 
 A repository that contains the data and code for:
 
-Larson, R.N., H. A. Sander, M. Fidino, J. L. Angstmann, L. Barczak, A. Davidge, D. Drake, L. Hartley, K. Moore, P. R. Sanchez, A. Robey, C. Salsbury, E. Sadkin, T. Snyder, T. Stankowich, K. Tombs, D. Will, J. Williamson, A. J. Zellmer, and S. B. Magle. City-specific responses to local land cover alter spatial overlap among tree squirrels in the United States. *Journal of Animal Ecology*. (In review)
+Larson, R.N., H. A. Sander, M. Fidino, J. L. Angstmann, L. Barczak, A. Davidge, D. Drake, L. Hartley, K. Moore, P. R. Sanchez, A. Robey, C. Salsbury, E. Sadkin, T. Snyder, T. Stankowich, K. Tombs, D. Will, J. Williamson, A. J. Zellmer, and S. B. Magle. City-specific responses to local land cover alter spatial overlap among tree squirrels in the United States. *Global Change Biology*. (In prep)
 
 
 This `README` file includes information on the various scripts and datasets used for this analysis. Not every data source is saved in this repository (e.g., GIS data). The manuscript contains citations for where to access the geospatial data.
@@ -97,3 +96,5 @@ This contains 5 files. These files are code for each Bayesian multi-city multi-s
 ---
 
 This contains 1 subfolder, `functions`, and one file.
+
+**./R/graphing.R:** R script for producing Figures 2 - 4
