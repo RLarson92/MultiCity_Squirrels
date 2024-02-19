@@ -95,6 +95,18 @@ This contains 5 files. These files are code for each Bayesian multi-city multi-s
 
 ---
 
-This contains 1 subfolder, `functions`, and one file.
+This contains 1 subfolder, `functions`, and two files.
+
+**./R/CoOccurrence_Model.R:** R script for running the models
 
 **./R/graphing.R:** R script for producing Figures 2 - 4
+
+<h2>functions</h2>
+
+**./R/functions/wide_to_stacked.R:** Script for taking wide-format detection histories and stacking them.
+
+**./R/functions/split_mcmc.R:** Script for splitting the output of mcmc chains into a matrix. Written by @MFidino
+
+**./R/functions/my_inits.R:** Script that stores initial values for JAGS model implementation
+
+**./R/functions/calc_cpo.R:** Script for calculating the conditional predictive coordinate (CPO) of each model. Written by @MFidino
