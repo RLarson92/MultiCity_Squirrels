@@ -23,7 +23,7 @@ canopy_mod <- readRDS("./results/canopy_model.RDS")
 mc <- as.mcmc(canopy_mod)
 library(MCMCvis)
 MCMCvis::MCMCsummary(mc,
-                     params = c("b1_mu", "b1_sd", "b1"),
+                     params = c("b1_mu", "b1_sd", "b1"),       # this is just a subset of parameters
                      probs = c(0.025, 0.25, 0.5, 0.75, 0.975), 
                      round = 2)
 
@@ -33,7 +33,7 @@ mc <- as.matrix(mc)
 # all 60K samples
 set.seed(554)
 mc_sub <- mc[sample(1:nrow(mc), 10000), ]
-# and use split_mcmc
+# and use split_mcmc (thanks @MFidino !)
 mc <- split_mcmc(mc_sub)
 rm(mc_sub)
 # check out the dimensions of one of the list elements. for this example (the slope term for my 
@@ -45,8 +45,11 @@ dim(mc$a1)
 # the species-specific terms (p0) will have dimensions equal to the number of MCMC samples,
 # the number of species sampled, then the number of cities
 
+# in the next fiew big chunks of code, I am putting together predicted occupancy probabilities for
+# each city. I will explain in detail this first example, then the sections are all fairly
+# similar to one another
 #### Austin, TX ####
-# generate a sequence of impervious surface values
+# generate a sequence of impervious surface values for the city in question
 range(cooc_covs$gmcCanopy[1:26])
 # [1] -19.04090  46.17025
 # I need to choose some 'pretty' numbers based on that
@@ -140,7 +143,7 @@ for(i in 1:ncol(pred_mat)){
     FUN = "/"
   )
 }
-
+# now we'll do the same thing, but this time including the autologistic term, phi
 # matrix should be long; ncol = length of your predictor sequence, 
 #                        nrow = # covariates + intercept + autologistic term (remember to use 
 #                           average values for all covariates except your variable of interest)
@@ -1649,7 +1652,8 @@ WIDE <- apply(
   probs = c(0.025,0.25,0.5,0.75,0.975)
 )
 #### Among-city Average ####
-# generate a sequence of impervious surface values
+# generate a sequence of impervious surface values that includes minimum and maximum across
+# all cities surveyed
 predV <- seq(-25, 58, length.out = 200)
 # Generating a matrix that will contain values for predicting. This includes our sequence of
 # impervious surface values, and adding a row of 1's for the intercept
@@ -1683,6 +1687,8 @@ pred_psi <- array(
 
 # dimensions should be: number of MCMC interactions by length of sequence of predictor variable
 # by number of states (8 states in a 3-species model)
+# note: because this is the among-city average, these include the "mu" terms, NOT the city-
+# specific terms
 # fill it in. No species is easy, it's just a 1.
 pred_psi[,,1] <- 1
 # Species 1 (fox squirrel)
@@ -1826,6 +1832,9 @@ ACA <- apply(
 
 #### Graphing ####
 # Fox squirrel marginal occupancy ####
+# making the dataframe to pass to ggplot
+# marginal occupancy = probability of all occupancy states including the speces of interest
+# combined (e.g., fox only + fox&gray + fox&red + allSpecies)
 FoxSQ <- rbind(data.frame(group = "Austin, TX\n(27%)",
                           imperv = seq(-19, 47, length.out = 200),
                           psi = (AUTX[3,,2] + AUTX[3,,5] + AUTX[3,,6] + AUTX[3,,8]),
@@ -1883,6 +1892,7 @@ FoxSQ$group <- factor(FoxSQ$group, levels = c("Los Angeles Metro,\nCA (4%)",
                                               "Austin, TX\n(27%)",
                                               "Rochester, NY\n(28%)"
 ))
+# saving the plot as its own object to make the multi-part figure
 p1 <- ggplot(FoxSQ, aes(x=imperv, y=psi)) +
   geom_ribbon(aes(ymin=lower, ymax=upper, fill=group), alpha=.3, show.legend=FALSE) +
   scale_fill_grafify(palette = "safe") +
@@ -2037,6 +2047,8 @@ p3 <- ggplot(RedSQ, aes(x=imperv, y=psi)) +
   theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
         axis.text.x=element_text(size=10), axis.text.y = element_blank(),
         axis.title=element_blank())
+# this 'p4' object pulls out the legend as its own object (for more info, see the 'get_legend'
+# function of the 'ggpubr' package)
 p4 <- ggplot(RedSQ, aes(x=imperv, y=psi))+
   geom_line(aes(color=group), linewidth = 1.05) +
   scale_color_grafify(palette = "safe") +
@@ -2046,13 +2058,16 @@ p4 <- ggplot(RedSQ, aes(x=imperv, y=psi))+
 
 leg <- get_legend(p4)
 leg <- as_ggplot(leg)
+# the code below makes & saves Figure 2
 jpeg("./results/MarginalOccupancy_all.jpeg", width = 6, height = 4, units = 'in', res = 300)
 gridExtra::grid.arrange(p1,p2,p3,leg, ncol=4, widths=c(1.5,1.25,1.25,1),
                         bottom=textGrob("Mean-centered Canopy Cover (%)", gp=gpar(fontsize=12)),
                         left="Marginal Occupancy")
 dev.off()
 
-# Fox and Gray conditional occupancy ####
+#### Fox and Gray conditional occupancy ####
+# the formatting of this data.frame is a little different; here we are subsetting
+# posterior distributions to their 95% credible interval
 FG <- rbind(data.frame(city="Chicago,\nIL",
                        dist = subset(mc$d0[,2], mc$d0[,2] > -2.17 & mc$d0[,2] < 0.74),
                        var = "Intercept"),
@@ -2093,7 +2108,7 @@ p1 <- ggplot(FG, aes(x=dist, y=city, fill=city, color=city)) +
         strip.background = element_blank(), strip.text=element_text(size=12,hjust=0.01,margin=margin(1,1,2,1,"pt")),
         legend.position = "none")
 
-# Gray and Red conditional occupancy ####
+#### Gray and Red conditional occupancy ####
 GR <- rbind(data.frame(city="Indianapolis,\nIN",
                        dist = subset(mc$g0[,4], mc$g0[,4] > 1.29 & mc$g0[,4] < 5.14),
                        var = "Intercept"),
@@ -2133,7 +2148,7 @@ p2 <- ggplot(GR, aes(x=dist, y=city, fill=city, color=city)) +
         strip.background = element_blank(), strip.text=element_text(size=12,hjust=0.01,margin=margin(1,1,2,1,"pt")),
         legend.position = "none")
 
-# Fox and Red conditional occupancy ####
+#### Fox and Red conditional occupancy ####
 FR <- rbind(data.frame(city="Indianapolis,\nIN",
                        dist = subset(mc$e0[,4], mc$e0[,4] > 3.22 & mc$e0[,4] < 8.55),
                        var = "Intercept"),
@@ -2160,18 +2175,19 @@ p3 <- ggplot(FR, aes(x=dist, y=city, fill=city, color=city)) +
   theme(axis.title=element_blank(), axis.text.x=element_text(size=8), axis.text.y=element_text(size=6),
         strip.background = element_blank(), strip.text=element_text(size=12,hjust=0.01,margin=margin(1,1,2,1,"pt")),
         legend.position = "none")
-
+# the code below plots & saves Figure 3
 jpeg("./results/CondDists.jpeg", width = 6, height = 4, units = 'in', res = 300)
 gridExtra::grid.arrange(p1,p2,p3, ncol=3,
                         bottom=textGrob("Effect Size (logit scale)", gp=gpar(fontsize=12))
                         )
 dev.off()
 
-# Iowa City Example ####
+#### Figure 4 - Iowa City Example ####
+# this code plots expected vs. model-estimated co-occurrence probabilites
 FG_pred <- rbind(data.frame(canopy = seq(-9, 47, length.out = 200),
-                            psi = ((ININ[3,,2] + ININ[3,,5] + ININ[3,,6] + ININ[3,,8])*(ICIA[3,,3] + ICIA[3,,5] + ICIA[3,,7] + ICIA[3,,8])),
-                            upper = ((ININ[5,,2] + ININ[5,,5] + ININ[5,,6] + ININ[5,,8])*(ICIA[5,,3] + ICIA[5,,5] + ICIA[5,,7] + ICIA[5,,8])),
-                            lower = ((ININ[1,,2] + ININ[1,,5] + ININ[1,,6] + ININ[1,,8])*(ICIA[1,,3] + ICIA[1,,5] + ICIA[1,,7] + ICIA[1,,8])),
+                            psi = ((ICIA[3,,2] + ICIA[3,,5] + ICIA[3,,6] + ICIA[3,,8])*(ICIA[3,,3] + ICIA[3,,5] + ICIA[3,,7] + ICIA[3,,8])),
+                            upper = ((ICIA[5,,2] + ICIA[5,,5] + ICIA[5,,6] + ICIA[5,,8])*(ICIA[5,,3] + ICIA[5,,5] + ICIA[5,,7] + ICIA[5,,8])),
+                            lower = ((ICIA[1,,2] + ICIA[1,,5] + ICIA[1,,6] + ICIA[1,,8])*(ICIA[1,,3] + ICIA[1,,5] + ICIA[1,,7] + ICIA[1,,8])),
                             state = "Expected Co-occurrence"),
               data.frame(canopy = seq(-9, 47, length.out = 200),
                           psi = (ICIA[3,,5] + ICIA[3,,8]) / (ICIA[3,,5] + ICIA[3,,6] + ICIA[3,,2] + ICIA[3,,8]),
@@ -2234,370 +2250,3 @@ gridExtra::grid.arrange(p1,p2,leg, ncol=3, widths=c(1.75,1.6,1),
                         bottom=textGrob("Mean-centered Canopy Cover (%)", gp=gpar(fontsize=12)),
                         left="Co-occurrence Probability")
 dev.off()
-
-#### Unused ####
-# Fox conditional on Red ####
-FcndR <- rbind(data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-11, 24, length.out = 200),
-                            psi = (ININ[3,,6] + ININ[3,,8]) / (ININ[3,,4] + ININ[3,,6] + ININ[3,,7] + ININ[3,,8]),
-                            upper = (ININ[5,,6] + ININ[5,,8]) / (ININ[5,,4] + ININ[5,,6] + ININ[5,,7] + ININ[5,,8]),
-                            lower = (ININ[1,,6] + ININ[1,,8]) / (ININ[1,,4] + ININ[1,,6] + ININ[1,,7] + ININ[1,,8]),
-                            State = "Red Squirrel Present"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-11, 24, length.out = 200),
-                            psi = (ININ[3,,2] + ININ[3,,5]) / (ININ[3,,5]+ ININ[3,,3] + ININ[3,,2] + ININ[3,,1]),
-                            upper = (ININ[5,,2] + ININ[5,,5]) / (ININ[5,,5]+ ININ[5,,3] + ININ[5,,2] + ININ[5,,1]),
-                            lower = (ININ[1,,2] + ININ[1,,5]) / (ININ[1,,5]+ ININ[1,,3] + ININ[1,,2] + ININ[1,,1]),
-                            State = "Red Squirrel Absent")
-)
-FR_ININ$State <- factor(FR_ININ$State, levels = c("Red Squirrel Present",
-                                                  "Red Squirrel Absent"))
-FR_ININ$city <- factor(FR_ININ$city, levels = c("Marginal",
-                                                "Indianapolis, IN"))
-plot <- ggplot(FR_ININ, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#CC0C00")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#CC0C00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Indianapolis, IN (32.9%)", 
-       x="Difference from City-Mean Impervious Surface Cover (%)", 
-       y="Fox Squirrel Conditional Occupancy", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-plot
-# Gray SQ Conditional on Fox ####
-# Chicago, IL ####
-GcndF <- rbind(data.frame(city = "Chicago, IL", 
-                            imperv = seq(-40, 49, length.out = 200),
-                            psi = (CHIL[3,,5] + CHIL[3,,8]) / (CHIL[3,,5] + CHIL[3,,6] + CHIL[3,,2] + CHIL[3,,8]),
-                            upper = (CHIL[5,,5] + CHIL[5,,8]) / (CHIL[5,,5] + CHIL[5,,6] + CHIL[5,,2] + CHIL[5,,8]),
-                            lower = (CHIL[1,,5] + CHIL[1,,8]) / (CHIL[1,,5] + CHIL[1,,6] + CHIL[1,,2] + CHIL[1,,8]),
-                            state = "Fox Squirrel Present"),
-                 data.frame(city = "Chicago, IL",
-                            imperv = seq(-40, 49, length.out = 200),
-                            psi = (CHIL[3,,3] + CHIL[3,,7]) / (CHIL[3,,7]+ CHIL[3,,4] + CHIL[3,,3] + CHIL[3,,1]),
-                            upper = (CHIL[5,,3] + CHIL[5,,7]) / (CHIL[5,,7]+ CHIL[5,,4] + CHIL[5,,3] + CHIL[5,,1]),
-                            lower = (CHIL[1,,3] + CHIL[1,,7]) / (CHIL[1,,7]+ CHIL[1,,4] + CHIL[1,,3] + CHIL[1,,1]),
-                            state = "Fox Squirrel Absent"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,5] + ININ[3,,8]) / (ININ[3,,5] + ININ[3,,6] + ININ[3,,2] + ININ[3,,8]),
-                            upper = (ININ[5,,5] + ININ[5,,8]) / (ININ[5,,5] + ININ[5,,6] + ININ[5,,2] + ININ[5,,8]),
-                            lower = (ININ[1,,5] + ININ[1,,8]) / (ININ[1,,5] + ININ[1,,6] + ININ[1,,2] + ININ[1,,8]),
-                            state = "Fox Squirrel Present"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,3] + ININ[3,,7]) / (ININ[3,,7]+ ININ[3,,4] + ININ[3,,3] + ININ[3,,1]),
-                            upper = (ININ[5,,3] + ININ[5,,7]) / (ININ[5,,7]+ ININ[5,,4] + ININ[5,,3] + ININ[5,,1]),
-                            lower = (ININ[1,,3] + ININ[1,,7]) / (ININ[1,,7]+ ININ[1,,4] + ININ[1,,3] + ININ[1,,1]),
-                            state = "Fox Squirrel Absent"),
-                 data.frame(city = "Iowa City, IA", 
-                            imperv = seq(-22, 37, length.out = 200),
-                            psi = (ICIA[3,,5] + ICIA[3,,8]) / (ICIA[3,,5] + ICIA[3,,6] + ICIA[3,,2] + ICIA[3,,8]),
-                            upper = (ICIA[5,,5] + ICIA[5,,8]) / (ICIA[5,,5] + ICIA[5,,6] + ICIA[5,,2] + ICIA[5,,8]),
-                            lower = (ICIA[1,,5] + ICIA[1,,8]) / (ICIA[1,,5] + ICIA[1,,6] + ICIA[1,,2] + ICIA[1,,8]),
-                            state = "Fox Squirrel Present"),
-                 data.frame(city = "Iowa City, IA", 
-                            imperv = seq(-22, 37, length.out = 200),
-                            psi = (ICIA[3,,3] + ICIA[3,,7]) / (ICIA[3,,7]+ ICIA[3,,4] + ICIA[3,,3] + ICIA[3,,1]),
-                            upper = (ICIA[5,,3] + ICIA[5,,7]) / (ICIA[5,,7]+ ICIA[5,,4] + ICIA[5,,3] + ICIA[5,,1]),
-                            lower = (ICIA[1,,3] + ICIA[1,,7]) / (ICIA[1,,7]+ ICIA[1,,4] + ICIA[1,,3] + ICIA[1,,1]),
-                            state = "Fox Squirrel Absent")
-)
-GF_CHIL$state <- factor(GF_CHIL$state, levels = c("Fox Squirrel Present",
-                                                  "Fox Squirrel Absent"))
-GF_CHIL$city <- factor(GF_CHIL$city, levels = c("Marginal",
-                                                "Chicago, IL"))
-p1 <- ggplot(GF_CHIL, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=state), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#84BD00")) +
-  geom_line(aes(color=city, linetype=state, size=city)) +
-  scale_color_manual(values=c("lightgray","#84BD00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Chicago, IL (39.7%)", x="", y="", color="", state="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position="none")
-# Indianapolis, IN ####
-GF_ININ$State <- factor(GF_ININ$State, levels = c("Fox Squirrel Present",
-                                                  "Fox Squirrel Absent"))
-GF_ININ$city <- factor(GF_ININ$city, levels = c("Marginal",
-                                                "Indianapolis, IN"))
-p2 <- ggplot(GF_ININ, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#CC0C00")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#CC0C00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Indianapolis, IN (32.9%)", x="", y="", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-# Iowa City, IA ####
-
-GF_ICIA$state <- factor(GF_ICIA$state, levels = c("Fox Squirrel Present",
-                                                  "Fox Squirrel Absent"))
-GF_ICIA$city <- factor(GF_ICIA$city, levels = c("Marginal",
-                                                "Iowa City, IA"))
-p3 <- ggplot(GF_ICIA, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=state), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#5C88DA")) +
-  geom_line(aes(color=city, linetype=state, size=city)) +
-  scale_color_manual(values=c("lightgray","#5C88DA")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  scale_linetype_manual(labels=c("Fox Squirrel\nPresent","Fox Squirrel\nAbsent"), values=c(1,2)) +
-  ylim(0,1) +
-  labs(title="Iowa City, IA (31.1%)", x="", y="", color="", state="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        axis.text.y=element_blank(), 
-        legend.position = c(0.70,0.92), legend.title = element_blank(), legend.background=element_blank(),
-        legend.text = element_text(size=6)) +
-  guides(color='none',size='none')
-jpeg("./results/grayFoxConditional.jpeg", width = 6, height = 4, units = 'in', res = 300)
-gridExtra::grid.arrange(p1,p2,p3, ncol=3,
-                        left="Eastern Gray Squirrel Conditional Occupancy",
-                        bottom="Difference from City-Mean Impervious Surface Cover (%)")
-dev.off()
-# Gray conditional on Red ####
-# Indianapolis, IN ####
-GcndR <- rbind(data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,7] + ININ[3,,8]) / (ININ[3,,7] + ININ[3,,6] + ININ[3,,4] + ININ[3,,8]),
-                            upper = (ININ[5,,7] + ININ[5,,8]) / (ININ[5,,7] + ININ[5,,6] + ININ[5,,4] + ININ[5,,8]),
-                            lower = (ININ[1,,7] + ININ[1,,8]) / (ININ[1,,7] + ININ[1,,6] + ININ[1,,4] + ININ[1,,8]),
-                            state = "Red Squirrel Present"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,3] + ININ[3,,5]) / (ININ[3,,5] + ININ[3,,2] + ININ[3,,3] + ININ[3,,1]),
-                            upper = (ININ[5,,3] + ININ[5,,5]) / (ININ[5,,5] + ININ[5,,2] + ININ[5,,3] + ININ[5,,1]),
-                            lower = (ININ[1,,3] + ININ[1,,5]) / (ININ[1,,5] + ININ[1,,2] + ININ[1,,3] + ININ[1,,1]),
-                            state = "Red Squirrel Absent"),
-                 data.frame(city = "Rochester, NY", 
-                            imperv = seq(-22, 37, length.out = 200),
-                            psi = (RONY[3,,7] + RONY[3,,8]) / (RONY[3,,7] + RONY[3,,6] + RONY[3,,4] + RONY[3,,8]),
-                            upper = (RONY[5,,7] + RONY[5,,8]) / (RONY[5,,7] + RONY[5,,6] + RONY[5,,4] + RONY[5,,8]),
-                            lower = (RONY[1,,7] + RONY[1,,8]) / (RONY[1,,7] + RONY[1,,6] + RONY[1,,4] + RONY[1,,8]),
-                            state = "Red Squirrel Present"),
-                 data.frame(city = "Rochester, NY", 
-                            imperv = seq(-22, 37, length.out = 200),
-                            psi = (RONY[3,,3] + RONY[3,,5]) / (RONY[3,,5] + RONY[3,,2] + RONY[3,,3] + RONY[3,,1]),
-                            upper = (RONY[5,,3] + RONY[5,,5]) / (RONY[5,,5] + RONY[5,,2] + RONY[5,,3] + RONY[5,,1]),
-                            lower = (RONY[1,,3] + RONY[1,,5]) / (RONY[1,,5] + RONY[1,,2] + RONY[1,,3] + RONY[1,,1]),
-                            state = "Red Squirrel Absent"),
-                 data.frame(city = "Wilmington, DE", 
-                            imperv = seq(-23, 23, length.out = 200),
-                            psi = (WIDE[3,,7] + WIDE[3,,8]) / (WIDE[3,,4] + WIDE[3,,7] + WIDE[3,,6] + WIDE[3,,8]),
-                            upper = (WIDE[5,,7] + WIDE[5,,8]) / (WIDE[5,,4] + WIDE[5,,7] + WIDE[5,,6] + WIDE[5,,8]),
-                            lower = (WIDE[1,,7] + WIDE[1,,8]) / (WIDE[1,,4] + WIDE[1,,7] + WIDE[1,,6] + WIDE[1,,8]),
-                            state = "Red Squirrel Present"),
-                 data.frame(city = "Wilmington, DE", 
-                            imperv = seq(-23, 23, length.out = 200),
-                            psi = (WIDE[3,,3] + WIDE[3,,5]) / (WIDE[3,,1] + WIDE[3,,3] + WIDE[3,,2] + WIDE[3,,5]),
-                            upper = (WIDE[5,,3] + WIDE[5,,5]) / (WIDE[5,,1] + WIDE[5,,3] + WIDE[5,,2] + WIDE[5,,5]),
-                            lower = (WIDE[1,,3] + WIDE[1,,5]) / (WIDE[1,,1] + WIDE[1,,3] + WIDE[1,,2] + WIDE[1,,5]),
-                            state = "Red Squirrel Absent")
-)
-GR_ININ$State <- factor(GR_ININ$State, levels = c("Red Squirrel Present",
-                                                  "Red Squirrel Absent"))
-GR_ININ$city <- factor(GR_ININ$city, levels = c("Marginal",
-                                                "Indianapolis, IN"))
-p1 <- ggplot(GR_ININ, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#CC0C00")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#CC0C00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Indianapolis, IN (32.9%)", x="", y="", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-# Rochester, NY ####
-GR_RONY$State <- factor(GR_RONY$State, levels = c("Red Squirrel Present",
-                                                  "Red Squirrel Absent"))
-GR_RONY$city <- factor(GR_RONY$city, levels = c("Marginal",
-                                                "Rochester, NY"))
-p2 <- ggplot(GR_RONY, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#00B5E2")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#00B5E2")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Rochester, NY (22.2%)", x="", y="", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-# Wilmington, DE ####
-GR_WIDE$state <- factor(GR_WIDE$state, levels = c("Red Squirrel Present",
-                                                  "Red Squirrel Absent"))
-GR_WIDE$city <- factor(GR_WIDE$city, levels = c("Marginal",
-                                                "Wilmington, DE"))
-p3 <- ggplot(GR_WIDE, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=state), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#00AF66")) +
-  geom_line(aes(color=city, linetype=state, size=city)) +
-  scale_color_manual(values=c("lightgray","#00AF66")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Wilmington, DE (23.5%)", x="", y="", color="", state="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        axis.text.y=element_blank(), 
-        legend.position = c(0.60,0.92), legend.title = element_blank(), legend.background=element_blank(),
-        legend.text = element_text(size=6)) +
-  guides(color='none',size='none')
-jpeg("./results/grayRedConditional.jpeg", width = 6, height = 4, units = 'in', res = 300)
-gridExtra::grid.arrange(p1,p2,p3, ncol=3,
-                        left="Eastern Gray Squirrel Conditional Occupancy",
-                        bottom="Difference from City-Mean Impervious Surface Cover (%)")
-dev.off()
-# Red conditional on Fox ####
-RcndF <- rbind(data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-11, 24, length.out = 200),
-                            psi = (ININ[3,,6] + ININ[3,,8]) / (ININ[3,,2] + ININ[3,,6] + ININ[3,,5] + ININ[3,,8]),
-                            upper = (ININ[5,,6] + ININ[5,,8]) / (ININ[5,,2] + ININ[5,,6] + ININ[5,,5] + ININ[5,,8]),
-                            lower = (ININ[1,,6] + ININ[1,,8]) / (ININ[1,,2] + ININ[1,,6] + ININ[1,,5] + ININ[1,,8]),
-                            State = "Fox Squirrel Present"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-11, 24, length.out = 200),
-                            psi = (ININ[3,,4] + ININ[3,,7]) / (ININ[3,,1]+ ININ[3,,4] + ININ[3,,3] + ININ[3,,7]),
-                            upper = (ININ[5,,4] + ININ[5,,7]) / (ININ[5,,1]+ ININ[5,,4] + ININ[5,,3] + ININ[5,,7]),
-                            lower = (ININ[1,,4] + ININ[1,,7]) / (ININ[1,,1]+ ININ[1,,4] + ININ[1,,3] + ININ[1,,7]),
-                            State = "Fox Squirrel Absent")
-)
-RF_ININ$State <- factor(RF_ININ$State, levels = c("Fox Squirrel Present",
-                                                  "Fox Squirrel Absent"))
-RF_ININ$city <- factor(RF_ININ$city, levels = c("Marginal",
-                                                "Indianapolis, IN"))
-plot <- ggplot(RF_ININ, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#CC0C00")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#CC0C00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Indianapolis, IN (32.9%)", 
-       x="Difference from City-Mean Impervious Surface Cover (%)", 
-       y="Red Squirrel Conditional Occupancy", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-plot
-# Red conditional on Gray ####
-# Indianapolis, IN ####
-RcndG <- rbind(data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,7] + ININ[3,,8]) / (ININ[3,,3] + ININ[3,,5] + ININ[3,,7] + ININ[3,,8]),
-                            upper = (ININ[5,,7] + ININ[5,,8]) / (ININ[5,,3] + ININ[5,,5] + ININ[5,,7] + ININ[5,,8]),
-                            lower = (ININ[1,,7] + ININ[1,,8]) / (ININ[1,,3] + ININ[1,,5] + ININ[1,,7] + ININ[1,,8]),
-                            state = "Gray Squirrel Present"),
-                 data.frame(city = "Indianapolis, IN", 
-                            imperv = seq(-31, 43, length.out = 200),
-                            psi = (ININ[3,,4] + ININ[3,,6]) / (ININ[3,,1] + ININ[3,,4] + ININ[3,,2] + ININ[3,,6]),
-                            upper = (ININ[5,,4] + ININ[5,,6]) / (ININ[5,,1] + ININ[5,,4] + ININ[5,,2] + ININ[5,,6]),
-                            lower = (ININ[1,,4] + ININ[1,,6]) / (ININ[1,,1] + ININ[1,,4] + ININ[1,,2] + ININ[1,,6]),
-                            state = "Gray Squirrel Absent"),
-               data.frame(city = "Rochester, NY", 
-                          imperv = seq(-22, 37, length.out = 200),
-                          psi = (RONY[3,,7] + RONY[3,,8]) / (RONY[3,,3] + RONY[3,,5] + RONY[3,,7] + RONY[3,,8]),
-                          upper = (RONY[5,,7] + RONY[5,,8]) / (RONY[5,,3] + RONY[5,,5] + RONY[5,,7] + RONY[5,,8]),
-                          lower = (RONY[1,,7] + RONY[1,,8]) / (RONY[1,,3] + RONY[1,,5] + RONY[1,,7] + RONY[1,,8]),
-                          state = "Gray Squirrel Present"),
-               data.frame(city = "Rochester, NY", 
-                          imperv = seq(-22, 37, length.out = 200),
-                          psi = (RONY[3,,4] + RONY[3,,6]) / (RONY[3,,1] + RONY[3,,4] + RONY[3,,2] + RONY[3,,6]),
-                          upper = (RONY[5,,4] + RONY[5,,6]) / (RONY[5,,1] + RONY[5,,4] + RONY[5,,2] + RONY[5,,6]),
-                          lower = (RONY[1,,4] + RONY[1,,6]) / (RONY[1,,1] + RONY[1,,4] + RONY[1,,2] + RONY[1,,6]),
-                          state = "Gray Squirrel Absent"),
-               data.frame(city = "Wilmington, DE", 
-                          imperv = seq(-23, 23, length.out = 200),
-                          psi = (WIDE[3,,7] + WIDE[3,,8]) / (WIDE[3,,3] + WIDE[3,,5] + WIDE[3,,7] + WIDE[3,,8]),
-                          upper = (WIDE[5,,7] + WIDE[5,,8]) / (WIDE[5,,3] + WIDE[5,,5] + WIDE[5,,7] + WIDE[5,,8]),
-                          lower = (WIDE[1,,7] + WIDE[1,,8]) / (WIDE[1,,3] + WIDE[1,,5] + WIDE[1,,7] + WIDE[1,,8]),
-                          state = "Gray Squirrel Present"),
-               data.frame(city = "Wilmington, DE", 
-                          imperv = seq(-23, 23, length.out = 200),
-                          psi = (WIDE[3,,4] + WIDE[3,,6]) / (WIDE[3,,1] + WIDE[3,,4] + WIDE[3,,2] + WIDE[3,,6]),
-                          upper = (WIDE[5,,4] + WIDE[5,,6]) / (WIDE[5,,1] + WIDE[5,,4] + WIDE[5,,2] + WIDE[5,,6]),
-                          lower = (WIDE[1,,4] + WIDE[1,,6]) / (WIDE[1,,1] + WIDE[1,,4] + WIDE[1,,2] + WIDE[1,,6]),
-                          state = "Gray Squirrel Absent")
-)
-RG_ININ$State <- factor(RG_ININ$State, levels = c("Gray Squirrel Present",
-                                                  "Gray Squirrel Absent"))
-RG_ININ$city <- factor(RG_ININ$city, levels = c("Marginal",
-                                                "Indianapolis, IN"))
-p1 <- ggplot(RG_ININ, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#CC0C00")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#CC0C00")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Indianapolis, IN (32.9%)", x="", y="", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none") 
-# Rochester, NY ####
-RG_RONY$State <- factor(RG_RONY$State, levels = c("Gray Squirrel Present",
-                                                  "Gray Squirrel Absent"))
-RG_RONY$city <- factor(RG_RONY$city, levels = c("Marginal",
-                                                "Rochester, NY"))
-p2 <- ggplot(RG_RONY, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=State), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#00B5E2")) +
-  geom_line(aes(color=city, linetype=State, size=city)) +
-  scale_color_manual(values=c("lightgray","#00B5E2")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Rochester, NY (22.2%)", x="", y="", color="", State="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text.y=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        legend.position = "none")
-# Wilmington, DE ####
-RG_WIDE$state <- factor(RG_WIDE$state, levels = c("Gray Squirrel Present",
-                                                  "Gray Squirrel Absent"))
-RG_WIDE$city <- factor(RG_WIDE$city, levels = c("Marginal",
-                                                "Wilmington, DE"))
-p3 <- ggplot(RG_WIDE, aes(x=imperv, y=psi)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper, fill=city, linetype=state), alpha=.1, show.legend=FALSE) +
-  scale_fill_manual(values=c("lightgray","#00AF66")) +
-  geom_line(aes(color=city, linetype=state, size=city)) +
-  scale_color_manual(values=c("lightgray","#00AF66")) +
-  scale_size_manual(values=c(0.5,1.05)) +
-  ylim(0,1) +
-  labs(title="Wilmington, DE (23.5%)", x="", y="", color="", state="State") +
-  theme_bw() +
-  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
-        axis.text=element_text(size=8), axis.title=element_text(size=10), plot.title=element_text(size=10),
-        axis.text.y=element_blank(), 
-        legend.position = c(0.58,0.92), legend.title = element_blank(), legend.background=element_blank(),
-        legend.text = element_text(size=6)) +
-  guides(color='none',size='none')
-jpeg("./results/redGrayConditional.jpeg", width = 6, height = 4, units = 'in', res = 300)
-gridExtra::grid.arrange(p1,p2,p3, ncol=3,
-                        left="Red Squirrel Conditional Occupancy",
-                        bottom="Difference from City-Mean Impervious Surface Cover (%)")
-dev.off()
-####
