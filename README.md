@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/744714616.svg)](https://zenodo.org/doi/10.5281/zenodo.10998904)
+
 # MultiCity_Squirrels
 
 A repository that contains the data and code for:
