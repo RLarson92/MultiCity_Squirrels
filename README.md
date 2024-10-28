@@ -4,7 +4,7 @@
 
 A repository that contains the data and code for:
 
-Larson, R.N., H. A. Sander, M. Fidino, J. L. Angstmann, L. Barczak, A. Davidge, D. Drake, L. Hartley, K. Moore, P. R. Sanchez, A. Robey, C. Salsbury, E. Sadkin, T. Snyder, T. Stankowich, K. Tombs, D. Will, J. Williamson, A. J. Zellmer, and S. B. Magle. City-specific responses to local land cover alter spatial overlap among tree squirrels in the United States. *Urban Ecosystems*. (In prep)
+Larson, R.N., H. A. Sander, M. Fidino, J. L. Angstmann, L. Barczak, A. Davidge, D. Drake, L. Hartley, K. Moore, P. R. Sanchez, A. Robey, C. Salsbury, E. Sadkin, T. Snyder, T. Stankowich, K. Tombs, D. Will, J. Williamson, A. J. Zellmer, and S. B. Magle. City-specific responses to local land cover alter spatial overlap among tree squirrels in the United States. *Urban Ecosystems*. 27: 2121-2133.
 
 
 This `README` file includes information on the various scripts and datasets used for this analysis. Not every data source is saved in this repository (e.g., GIS data). The manuscript contains citations for where to access the geospatial data.
